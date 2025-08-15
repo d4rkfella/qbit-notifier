@@ -45,22 +45,21 @@ var (
 // Types
 // ---------------------------
 
-type Config struct {
-	CrossSeedEnabled bool
-	CrossSeedURL     string
-	CrossSeedAPIKey  string
-	PushoverEnabled  bool
-	PushoverUserKey  string
-	PushoverToken    string
+type config struct {
+	crossSeedEnabled bool
+	crossSeedURL     string
+	crossSeedAPIKey  string
+	pushoverEnabled  bool
+	pushoverUserKey  string
+	pushoverToken    string
 }
 
-type ReleaseInfo struct {
-	Name     string `validate:"required"`
-	InfoHash string `validate:"required,infohash"`
-	Category string `validate:"required"`
-	Size     int64  `validate:"gt=0"`
-	Indexer  string `validate:"required,url"`
-	Type     string `validate:"required"`
+type releaseInfo struct {
+	name     string `validate:"required"`
+	infoHash string `validate:"required,infohash"`
+	category string `validate:"required"`
+	size     int64  `validate:"gt=0"`
+	indexer  string `validate:"required,url"`
 }
 
 // ---------------------------
@@ -131,7 +130,7 @@ func main() {
 // Orchestration
 // ---------------------------
 
-func run(ctx context.Context, args []string, cfg *Config) error {
+func run(ctx context.Context, args []string, cfg *config) error {
 	release, err := parseAndValidateReleaseInfo(args)
 	if err != nil {
 		return fmt.Errorf("invalid input: %w", err)
@@ -141,13 +140,13 @@ func run(ctx context.Context, args []string, cfg *Config) error {
 	pushoverLimiter := rate.NewLimiter(rate.Every(5*time.Second), 2)
 	crossSeedLimiter := rate.NewLimiter(rate.Every(5*time.Second), 2)
 
-	if cfg.PushoverEnabled {
+	if cfg.pushoverEnabled {
 		if err := handlePushover(ctx, cfg, release, pushoverLimiter); err != nil {
 			return fmt.Errorf("pushover notification failed: %w", err)
 		}
 	}
 
-	if cfg.CrossSeedEnabled {
+	if cfg.crossSeedEnabled {
 		if err := handleCrossSeed(ctx, cfg, release, crossSeedLimiter); err != nil {
 			return fmt.Errorf("cross-seed search failed: %w", err)
 		}
@@ -160,7 +159,7 @@ func run(ctx context.Context, args []string, cfg *Config) error {
 // Handlers
 // ---------------------------
 
-func handlePushover(ctx context.Context, cfg *Config, release *ReleaseInfo, limiter *rate.Limiter) error {
+func handlePushover(ctx context.Context, cfg *config, release *releaseInfo, limiter *rate.Limiter) error {
 	if err := limiter.Wait(ctx); err != nil {
 		log.WarnContext(ctx, "Rate limit exceeded for Pushover", "error", err)
 		return err
@@ -168,7 +167,7 @@ func handlePushover(ctx context.Context, cfg *Config, release *ReleaseInfo, limi
 	return sendPushoverNotification(ctx, cfg, release)
 }
 
-func handleCrossSeed(ctx context.Context, cfg *Config, release *ReleaseInfo, limiter *rate.Limiter) error {
+func handleCrossSeed(ctx context.Context, cfg *config, release *releaseInfo, limiter *rate.Limiter) error {
 	if err := limiter.Wait(ctx); err != nil {
 		log.WarnContext(ctx, "Rate limit exceeded for CrossSeed", "error", err)
 		return err
@@ -180,22 +179,22 @@ func handleCrossSeed(ctx context.Context, cfg *Config, release *ReleaseInfo, lim
 // Config
 // ---------------------------
 
-func loadConfig() *Config {
-	return &Config{
-		CrossSeedEnabled: getEnvBool("CROSS_SEED_ENABLED", false),
-		CrossSeedURL:     os.Getenv("CROSS_SEED_URL"),
-		CrossSeedAPIKey:  os.Getenv("CROSS_SEED_API_KEY"),
-		PushoverEnabled:  getEnvBool("PUSHOVER_ENABLED", false),
-		PushoverUserKey:  os.Getenv("PUSHOVER_USER_KEY"),
-		PushoverToken:    os.Getenv("PUSHOVER_TOKEN"),
+func loadConfig() *config {
+	return &config{
+		crossSeedEnabled: getEnvBool("CROSS_SEED_ENABLED", false),
+		crossSeedURL:     os.Getenv("CROSS_SEED_URL"),
+		crossSeedAPIKey:  os.Getenv("CROSS_SEED_API_KEY"),
+		pushoverEnabled:  getEnvBool("PUSHOVER_ENABLED", false),
+		pushoverUserKey:  os.Getenv("PUSHOVER_USER_KEY"),
+		pushoverToken:    os.Getenv("PUSHOVER_TOKEN"),
 	}
 }
 
-func (cfg *Config) Validate() error {
-	if cfg.PushoverEnabled && (cfg.PushoverUserKey == "" || cfg.PushoverToken == "") {
+func (cfg *config) Validate() error {
+	if cfg.pushoverEnabled && (cfg.pushoverUserKey == "" || cfg.pushoverToken == "") {
 		return errors.New("pushover enabled but missing credentials")
 	}
-	if cfg.CrossSeedEnabled && (cfg.CrossSeedURL == "" || cfg.CrossSeedAPIKey == "") {
+	if cfg.crossSeedEnabled && (cfg.crossSeedURL == "" || cfg.crossSeedAPIKey == "") {
 		return errors.New("cross-seed enabled but missing configuration")
 	}
 	return nil
@@ -209,23 +208,11 @@ func getEnvBool(key string, defaultValue bool) bool {
 	return strings.ToLower(val) == "true"
 }
 
-func getEnvInt(key string, defaultValue int) int {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultValue
-	}
-	result, err := strconv.Atoi(val)
-	if err != nil {
-		return defaultValue
-	}
-	return result
-}
-
 // ---------------------------
 // Release parsing
 // ---------------------------
 
-func parseAndValidateReleaseInfo(args []string) (*ReleaseInfo, error) {
+func parseAndValidateReleaseInfo(args []string) (*releaseInfo, error) {
 	if len(args) != 5 {
 		return nil, errors.New("invalid number of arguments (need 5)")
 	}
@@ -235,13 +222,12 @@ func parseAndValidateReleaseInfo(args []string) (*ReleaseInfo, error) {
 		return nil, fmt.Errorf("invalid size: %w", err)
 	}
 
-	release := &ReleaseInfo{
-		Name:     strings.TrimSpace(args[0]),
-		InfoHash: strings.ToLower(strings.TrimSpace(args[1])),
-		Category: strings.TrimSpace(args[2]),
-		Size:     size,
-		Indexer:  strings.TrimSpace(args[4]),
-		Type:     "Torrent",
+	release := &releaseInfo{
+		name:     strings.TrimSpace(args[0]),
+		infoHash: strings.ToLower(strings.TrimSpace(args[1])),
+		category: strings.TrimSpace(args[2]),
+		size:     size,
+		indexer:  strings.TrimSpace(args[4]),
 	}
 
 	if err := validate.Struct(release); err != nil {
@@ -323,19 +309,19 @@ func getLogLevel() slog.Level {
 // Notification Senders
 // ---------------------------
 
-func sendPushoverNotification(ctx context.Context, cfg *Config, release *ReleaseInfo) error {
+func sendPushoverNotification(ctx context.Context, cfg *config, release *releaseInfo) error {
 	message := fmt.Sprintf(
 		"<b>%s</b><small>\n<b>Category:</b> %s</small><small>\n<b>Indexer:</b> %s</small><small>\n<b>Size:</b> %s</small>",
-		html.EscapeString(strings.TrimSuffix(release.Name, ".torrent")),
-		html.EscapeString(release.Category),
-		html.EscapeString(release.Indexer),
-		humanize.Bytes(uint64(release.Size)),
+		html.EscapeString(strings.TrimSuffix(release.name, ".torrent")),
+		html.EscapeString(release.category),
+		html.EscapeString(release.indexer),
+		humanize.Bytes(uint64(release.size)),
 	)
 
 	payload := map[string]string{
-		"token":    cfg.PushoverToken,
-		"user":     cfg.PushoverUserKey,
-		"title":    fmt.Sprintf("%s Downloaded", release.Type),
+		"token":    cfg.pushoverToken,
+		"user":     cfg.pushoverUserKey,
+		"title":    "Torrent Downloaded",
 		"message":  message,
 		"priority": "-2",
 		"html":     "1",
@@ -353,14 +339,14 @@ func sendPushoverNotification(ctx context.Context, cfg *Config, release *Release
 	})
 }
 
-func searchCrossSeed(ctx context.Context, cfg *Config, release *ReleaseInfo) error {
-	targetURL, err := buildSafeURL(cfg.CrossSeedURL, "/api/webhook")
+func searchCrossSeed(ctx context.Context, cfg *config, release *releaseInfo) error {
+	targetURL, err := buildSafeURL(cfg.crossSeedURL, "/api/webhook")
 	if err != nil {
 		return fmt.Errorf("failed to build safe URL: %w", err)
 	}
 
 	data := url.Values{}
-	data.Set("infoHash", release.InfoHash)
+	data.Set("infoHash", release.infoHash)
 	data.Set("includeSingleEpisodes", "true")
 
 	return retryOperation(ctx, 3, 2*time.Second, func() error {
@@ -371,7 +357,7 @@ func searchCrossSeed(ctx context.Context, cfg *Config, release *ReleaseInfo) err
 			data.Encode(),
 			map[string]string{
 				"Content-Type": "application/x-www-form-urlencoded",
-				"X-Api-Key":    cfg.CrossSeedAPIKey,
+				"X-Api-Key":    cfg.crossSeedAPIKey,
 			},
 			http.StatusNoContent,
 		)
@@ -439,7 +425,11 @@ func sendHTTPRequest(
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.WarnContext(ctx, "Failed to close response body", "error", err)
+		}
+	}()
 
 	respBody, _ := io.ReadAll(resp.Body)
 
@@ -505,7 +495,7 @@ func retryOperation(ctx context.Context, maxAttempts int, initialDelay time.Dura
 func isRetriableError(err error) bool {
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		return netErr.Timeout() || netErr.Temporary()
+		return netErr.Timeout()
 	}
 
 	var statusErr interface{ StatusCode() int }
@@ -516,11 +506,7 @@ func isRetriableError(err error) bool {
 	}
 
 	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return true
-	}
-
-	return false
+	return errors.As(err, &dnsErr)
 }
 
 // ---------------------------
