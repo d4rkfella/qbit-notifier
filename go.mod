@@ -1,4 +1,4 @@
-module github.com/qbit-notifier/cross-seed-search
+module github.com/d4rkfella/qbit-notifier
 
 go 1.25.1
 
